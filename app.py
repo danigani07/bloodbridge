@@ -350,7 +350,7 @@ def donor_dashboard():
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # Get requests matching donor's blood type and approved by manager
+        # Get all pending requests matching donor's blood type
         cursor.execute("""
             SELECT r.*, 
                 reg.fullname as requester_name,
@@ -358,12 +358,9 @@ def donor_dashboard():
             FROM request r
             JOIN register reg ON r.requester_id = reg.id
             WHERE r.blood_type = %s 
+            AND r.status = 'pending'
             AND r.donor_id IS NULL
             ORDER BY 
-                CASE 
-                    WHEN r.manager_approval = 'approve' AND r.status = 'pending' THEN 1
-                    ELSE 2
-                END,
                 CASE r.urgency
                     WHEN 'High' THEN 1
                     WHEN 'Medium' THEN 2
@@ -491,3 +488,59 @@ if __name__ == "__main__":
         exit(1)
     app.run(debug=True, host="0.0.0.0", port=8000)
 
+@app.route("/respond_to_request/<int:request_id>", methods=['POST'])
+def respond_to_request(request_id):
+    user = session.get('user')
+    if not user or (user['role'] != 'donor' and user['role'] != 'manager'):
+        return redirect(url_for('login'))
+
+    action = request.form.get('action')
+    if action not in ['accept', 'reject']:
+        flash("Invalid action")
+        return redirect(url_for('donor_dashboard'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        if action == 'accept':
+            # Update request with donor/manager's acceptance
+            cursor.execute("""
+                UPDATE request 
+                SET donor_id = %s,
+                    status = 'donated',
+                    manager_approval = CASE 
+                        WHEN %s = 'manager' THEN 'approve'
+                        ELSE manager_approval
+                    END
+                WHERE id = %s AND status = 'pending'
+            """, (user['id'], user['role'], request_id))
+        else:  # action == 'reject'
+            # Mark request as rejected
+            cursor.execute("""
+                UPDATE request 
+                SET status = 'rejected',
+                    manager_approval = CASE 
+                        WHEN %s = 'manager' THEN 'reject'
+                        ELSE manager_approval
+                    END
+                WHERE id = %s AND status = 'pending'
+            """, (user['role'], request_id))
+        
+        conn.commit()
+        flash(f"Request {action}ed successfully!")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error updating request: {str(e)}")
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return_route = 'inventory' if user['role'] == 'manager' else 'donor_dashboard'
+    return redirect(url_for(return_route))
+
+if __name__ == "__main__":
+    if not test_database_connection():
+        logging.error("Failed to connect to database. Check your configuration.")
+        exit(1)
+    app.run(debug=True, host="0.0.0.0", port=8000)
