@@ -186,10 +186,15 @@ def req():
             flash("Blood request created successfully!")
             return redirect(url_for('dashboard'))
 
-        # Get existing requests for display
+        # Get pending requests for status display
         cursor.execute("""
             SELECT r.*, 
-                DATE_FORMAT(r.date, '%Y-%m-%d %H:%i') as formatted_date
+                DATE_FORMAT(r.date, '%Y-%m-%d %H:%i') as formatted_date,
+                CASE 
+                    WHEN r.status = 'donated' THEN 'Donated'
+                    WHEN r.status = 'rejected' THEN 'Rejected'
+                    ELSE 'Pending'
+                END as status_display
             FROM request r
             WHERE r.requester_id = %s
             ORDER BY r.date DESC
@@ -335,7 +340,7 @@ def inventory():
         conn.close()
 
 # New route for donor dashboard
-@app.route("/donor-dashboard")
+@app.route("/donor_dashboard")
 def donor_dashboard():
     user = session.get('user')
     if not user or user['role'] != 'donor':
@@ -345,31 +350,17 @@ def donor_dashboard():
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # Get donor's responses
+        # Get requests matching donor's blood type and approved by manager
         cursor.execute("""
-            SELECT 
-                r.*,
+            SELECT r.*, 
                 reg.fullname as requester_name,
                 DATE_FORMAT(r.date, '%Y-%m-%d %H:%i') as formatted_date
             FROM request r
             JOIN register reg ON r.requester_id = reg.id
-            WHERE r.donor_id = %s
-            ORDER BY r.date DESC
-        """, (user['id'],))
-        donor_responses = cursor.fetchall()
-
-        # Get available requests
-        cursor.execute("""
-            SELECT 
-                r.*,
-                reg.fullname as requester_name,
-                DATE_FORMAT(r.date, '%Y-%m-%d %H:%i') as formatted_date
-            FROM request r
-            JOIN register reg ON r.requester_id = reg.id
-            WHERE r.donor_id IS NULL 
-            AND r.manager_approval = 'approve'
+            WHERE r.blood_type = %s 
             AND r.status = 'pending'
-            AND r.blood_type = %s
+            AND r.manager_approval = 'approve'
+            AND r.donor_id IS NULL
             ORDER BY 
                 CASE r.urgency
                     WHEN 'High' THEN 1
@@ -378,12 +369,25 @@ def donor_dashboard():
                 END,
                 r.date DESC
         """, (user['blood_type'],))
-        available_requests = cursor.fetchall()
+        requests = cursor.fetchall()
 
-        return render_template("donor_dashboard.html", 
-                            user=user, 
-                            requests=available_requests,
-                            donor_responses=donor_responses)
+        # Get donor's previous responses
+        cursor.execute("""
+            SELECT r.*, 
+                reg.fullname as requester_name,
+                DATE_FORMAT(r.date, '%Y-%m-%d %H:%i') as formatted_date,
+                r.status as confirmation_status
+            FROM request r
+            JOIN register reg ON r.requester_id = reg.id
+            WHERE r.donor_id = %s
+            ORDER BY r.date DESC
+        """, (user['id'],))
+        donor_responses = cursor.fetchall()
+
+        return render_template('donor_dashboard.html', 
+                             user=user, 
+                             requests=requests, 
+                             donor_responses=donor_responses)
 
     except Exception as e:
         flash(f"Error: {str(e)}")
