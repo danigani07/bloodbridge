@@ -1,0 +1,60 @@
+<!-- donor_dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>BloodBridge - Donor Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Welcome, {{ user['fullname'] }}</h1>
+        <nav>
+            <a href="{{ url_for('login') }}" class="nav-logout">Logout</a>
+        </nav>
+    </header>
+    <main>
+        <h2>Your Donation Responses</h2>
+        {% if donor_responses %}
+            <ul class="response-list">
+                {% for response in donor_responses %}
+                    <li class="response-item">
+                        <div class="response-details">
+                            <p>Date: {{ response.date.strftime('%Y-%m-%d %H:%M') if response.date else 'N/A' }}</p>
+                            <p>Location: {{ response.location }}</p>
+                            <p>Blood Type: {{ response.blood_type }}</p>
+                            <p>Urgency: {{ response.urgency }}</p>
+                            <p>Requested by: {{ response.requester_name }}</p>
+                            <p class="status {{ response.confirmation_status }}">
+                                Status: {{ response.confirmation_status|title if response.confirmation_status else 'Pending' }}
+                            </p>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No donation responses yet.</p>
+        {% endif %}
+
+        <h2>Available Blood Requests</h2>
+        {% if requests %}
+            <ul class="request-list">
+                {% for request in requests %}
+                    <li class="request-item">
+                        <div class="request-details">
+                            <p>Date: {{ request.date.strftime('%Y-%m-%d %H:%M') if request.date else 'N/A' }}</p>
+                            <p>Location: {{ request.location }}</p>
+                            <p>Blood Type Needed: {{ request.blood_type }}</p>
+                            <p>Urgency: {{ request.urgency }}</p>
+                            <p>Requested by: {{ request.requester_name }}</p>
+                            <a href="{{ url_for('respond', request_id=request.id) }}" class="button">Respond to Request</a>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No current blood requests.</p>
+        {% endif %}
+    </main>
+</body>
+</html> 
