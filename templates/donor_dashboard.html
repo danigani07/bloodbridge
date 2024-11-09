@@ -31,11 +31,11 @@
                                 </p>
                                 {% if request.status == 'pending' %}
                                     <div class="approval-buttons">
-                                        <form action="{{ url_for('respond_to_request', request_id=request.id) }}" method="post" class="inline-form">
+                                        <form action="{{ url_for('approve_request', request_id=request.id) }}" method="post" class="inline-form">
                                             <input type="hidden" name="action" value="accept">
                                             <button type="submit" class="approve-btn">Donate</button>
                                         </form>
-                                        <form action="{{ url_for('respond_to_request', request_id=request.id) }}" method="post" class="inline-form">
+                                        <form action="{{ url_for('approve_request', request_id=request.id) }}" method="post" class="inline-form">
                                             <input type="hidden" name="action" value="reject">
                                             <button type="submit" class="reject-btn">Reject</button>
                                         </form>
