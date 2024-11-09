@@ -428,32 +428,44 @@ def confirm_donation(request_id):
 @app.route("/approve_request/<int:request_id>", methods=['POST'])
 def approve_request(request_id):
     user = session.get('user')
-    if not user or user['role'] != 'manager':
+    if not user or (user['role'] != 'donor' and user['role'] != 'manager'):
         return redirect(url_for('login'))
 
     action = request.form.get('action')
-    if action not in ['approve', 'reject']:
+    if action not in ['accept', 'reject']:
         flash("Invalid action")
-        return redirect(url_for('inventory'))
+        return redirect(url_for('donor_dashboard'))
 
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        # Update both manager_approval and status fields
-        cursor.execute("""
-            UPDATE request 
-            SET manager_approval = %s,
-                status = CASE 
-                    WHEN %s = 'approve' THEN 'donated'
-                    WHEN %s = 'reject' THEN 'rejected'
-                    ELSE status
-                END
-            WHERE id = %s
-        """, (action, action, action, request_id))
+        if action == 'accept':
+            # Update request with donor/manager's acceptance
+            cursor.execute("""
+                UPDATE request 
+                SET donor_id = %s,
+                    status = 'donated',
+                    manager_approval = CASE 
+                        WHEN %s = 'manager' THEN 'approve'
+                        ELSE manager_approval
+                    END
+                WHERE id = %s AND status = 'pending'
+            """, (user['id'], user['role'], request_id))
+        else:  # action == 'reject'
+            # Mark request as rejected
+            cursor.execute("""
+                UPDATE request 
+                SET status = 'rejected',
+                    manager_approval = CASE 
+                        WHEN %s = 'manager' THEN 'reject'
+                        ELSE manager_approval
+                    END
+                WHERE id = %s AND status = 'pending'
+            """, (user['role'], request_id))
         
         conn.commit()
-        flash(f"Request {action}d successfully!")
+        flash(f"Request {action}ed successfully!")
     except Exception as e:
         conn.rollback()
         flash(f"Error updating request: {str(e)}")
@@ -461,7 +473,8 @@ def approve_request(request_id):
         cursor.close()
         conn.close()
     
-    return redirect(url_for('inventory'))
+    return_route = 'inventory' if user['role'] == 'manager' else 'donor_dashboard'
+    return redirect(url_for(return_route))
 
 # Add this at the top of your file with other imports
 import logging
