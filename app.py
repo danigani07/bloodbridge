@@ -358,10 +358,12 @@ def donor_dashboard():
             FROM request r
             JOIN register reg ON r.requester_id = reg.id
             WHERE r.blood_type = %s 
-            AND r.status = 'pending'
-            AND r.manager_approval = 'approve'
             AND r.donor_id IS NULL
             ORDER BY 
+                CASE 
+                    WHEN r.manager_approval = 'approve' AND r.status = 'pending' THEN 1
+                    ELSE 2
+                END,
                 CASE r.urgency
                     WHEN 'High' THEN 1
                     WHEN 'Medium' THEN 2
@@ -371,12 +373,11 @@ def donor_dashboard():
         """, (user['blood_type'],))
         requests = cursor.fetchall()
 
-        # Get donor's previous responses
+        # Get donor's responses/history
         cursor.execute("""
             SELECT r.*, 
                 reg.fullname as requester_name,
-                DATE_FORMAT(r.date, '%Y-%m-%d %H:%i') as formatted_date,
-                r.status as confirmation_status
+                DATE_FORMAT(r.date, '%Y-%m-%d %H:%i') as formatted_date
             FROM request r
             JOIN register reg ON r.requester_id = reg.id
             WHERE r.donor_id = %s
